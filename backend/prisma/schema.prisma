@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Market {
+  id            String         @id @default(uuid())
+  publicKey     String         @unique
+  owner         String // Creator's wallet - receives 30% of fees
+  mint          String         @unique
+  escrow        String
+  treasury      String
+  
+  name          String
+  symbol        String
+  description   String?
+  imageUrl      String?
+  metadataUri   String?
+  
+  initialPrice      BigInt
+  initialSupply     BigInt
+  currentPrice      BigInt
+  totalSupply       BigInt
+  circulatingSupply BigInt         @default(0)
+  tradeCount        Int            @default(0)
+  
+  // ✅ Non-nullable fee tracking with defaults
+  totalCreatorFees  BigInt         @default(0)
+  totalPlatformFees BigInt         @default(0)
+  
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  transactions  Transaction[]
+  priceHistory  PriceHistory[]
+  holders       Holder[]
+  status        MarketStatus   @default(PENDING)
+  
+  @@index([publicKey])
+  @@index([mint])
+  @@index([owner])
+  @@index([createdAt])
+  @@index([totalCreatorFees])
+}
+
+enum MarketStatus {
+  ACTIVE
+  PENDING
+  CLOSED
+}
+
+model Transaction {
+  id            String            @id @default(uuid())
+  signature     String            @unique
+  
+  marketId      String
+  market        Market            @relation(fields: [marketId], references: [id])
+  
+  type          TransactionType
+  userWallet    String
+  amount        BigInt
+  pricePerToken BigInt
+  totalValue    BigInt
+  
+  // ✅ Non-nullable fee fields with defaults
+  platformFee   BigInt            @default(0) // 70% of total fee
+  creatorFee    BigInt            @default(0) // 30% of total fee
+  totalFee      BigInt            @default(0) // platformFee + creatorFee
+  
+  status        TransactionStatus @default(PENDING)
+  error         String?
+  
+  blockTime     DateTime
+  createdAt     DateTime          @default(now())
+  
+  @@index([signature])
+  @@index([marketId])
+  @@index([userWallet])
+  @@index([blockTime])
+  @@index([type])
+}
+
+enum TransactionType {
+  BUY
+  SELL
+  CREATE_MARKET
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+model PriceHistory {
+  id       String @id @default(uuid())
+  marketId String
+  market   Market @relation(fields: [marketId], references: [id])
+
+  price  BigInt
+  volume BigInt
+  trades Int
+
+  timestamp DateTime
+  interval  PriceInterval
+
+  @@unique([marketId, timestamp, interval])
+  @@index([marketId, interval, timestamp])
+}
+
+enum PriceInterval {
+  ONE_MINUTE
+  FIVE_MINUTES
+  ONE_HOUR
+  ONE_DAY
+}
+
+model Holder {
+  id       String @id @default(uuid())
+  marketId String
+  market   Market @relation(fields: [marketId], references: [id])
+
+  walletAddress String
+  balance       BigInt
+
+  totalBought     BigInt @default(0)
+  totalSold       BigInt @default(0)
+  averageBuyPrice BigInt @default(0)
+  realizedPnL     BigInt @default(0)
+
+  firstPurchase DateTime
+  lastActivity  DateTime
+  updatedAt     DateTime @updatedAt
+
+  @@unique([marketId, walletAddress])
+  @@index([walletAddress])
+  @@index([marketId, balance])
+}
+
+model User {
+  id            String @id @default(uuid())
+  walletAddress String @unique
+
+  username String?
+  avatar   String?
+  bio      String?
+
+  totalTrades    Int    @default(0)
+  totalVolume    BigInt @default(0)
+  marketsCreated Int    @default(0)
+  
+  // ✅ Non-nullable with default
+  totalEarningsAsCreator BigInt @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([walletAddress])
+  @@index([totalEarningsAsCreator])
+}
+
+model PlatformStats {
+  id String @id @default(uuid())
+
+  date              DateTime @unique
+  totalMarkets      Int
+  totalTransactions Int
+  totalVolume       BigInt
+  
+  // ✅ Non-nullable with defaults
+  totalPlatformFees BigInt @default(0)
+  totalCreatorFees  BigInt @default(0)
+  totalFees         BigInt @default(0)
+  
+  activeUsers       Int
+  newUsers          Int
+
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model Notification {
+  id         String @id @default(uuid())
+  userWallet String
+
+  type    NotificationType
+  title   String
+  message String
+  link    String?
+
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userWallet, read])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  TRADE_EXECUTED
+  PRICE_ALERT
+  NEW_HOLDER
+  MARKET_CREATED
+  CREATOR_EARNINGS
+}
