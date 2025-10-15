@@ -1,4 +1,7 @@
 -- CreateEnum
+CREATE TYPE "MarketStatus" AS ENUM ('ACTIVE', 'PENDING', 'CLOSED');
+
+-- CreateEnum
 CREATE TYPE "TransactionType" AS ENUM ('BUY', 'SELL', 'CREATE_MARKET');
 
 -- CreateEnum
@@ -8,7 +11,7 @@ CREATE TYPE "TransactionStatus" AS ENUM ('PENDING', 'CONFIRMED', 'FAILED');
 CREATE TYPE "PriceInterval" AS ENUM ('ONE_MINUTE', 'FIVE_MINUTES', 'ONE_HOUR', 'ONE_DAY');
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('TRADE_EXECUTED', 'PRICE_ALERT', 'NEW_HOLDER', 'MARKET_CREATED');
+CREATE TYPE "NotificationType" AS ENUM ('TRADE_EXECUTED', 'PRICE_ALERT', 'NEW_HOLDER', 'MARKET_CREATED', 'CREATOR_EARNINGS');
 
 -- CreateTable
 CREATE TABLE "Market" (
@@ -27,9 +30,13 @@ CREATE TABLE "Market" (
     "initialSupply" BIGINT NOT NULL,
     "currentPrice" BIGINT NOT NULL,
     "totalSupply" BIGINT NOT NULL,
+    "circulatingSupply" BIGINT NOT NULL DEFAULT 0,
     "tradeCount" INTEGER NOT NULL DEFAULT 0,
+    "totalCreatorFees" BIGINT NOT NULL DEFAULT 0,
+    "totalPlatformFees" BIGINT NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "status" "MarketStatus" NOT NULL DEFAULT 'PENDING',
 
     CONSTRAINT "Market_pkey" PRIMARY KEY ("id")
 );
@@ -44,7 +51,9 @@ CREATE TABLE "Transaction" (
     "amount" BIGINT NOT NULL,
     "pricePerToken" BIGINT NOT NULL,
     "totalValue" BIGINT NOT NULL,
-    "platformFee" BIGINT NOT NULL,
+    "platformFee" BIGINT NOT NULL DEFAULT 0,
+    "creatorFee" BIGINT NOT NULL DEFAULT 0,
+    "totalFee" BIGINT NOT NULL DEFAULT 0,
     "status" "TransactionStatus" NOT NULL DEFAULT 'PENDING',
     "error" TEXT,
     "blockTime" TIMESTAMP(3) NOT NULL,
@@ -93,6 +102,7 @@ CREATE TABLE "User" (
     "totalTrades" INTEGER NOT NULL DEFAULT 0,
     "totalVolume" BIGINT NOT NULL DEFAULT 0,
     "marketsCreated" INTEGER NOT NULL DEFAULT 0,
+    "totalEarningsAsCreator" BIGINT NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -106,7 +116,9 @@ CREATE TABLE "PlatformStats" (
     "totalMarkets" INTEGER NOT NULL,
     "totalTransactions" INTEGER NOT NULL,
     "totalVolume" BIGINT NOT NULL,
-    "totalFees" BIGINT NOT NULL,
+    "totalPlatformFees" BIGINT NOT NULL DEFAULT 0,
+    "totalCreatorFees" BIGINT NOT NULL DEFAULT 0,
+    "totalFees" BIGINT NOT NULL DEFAULT 0,
     "activeUsers" INTEGER NOT NULL,
     "newUsers" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -147,6 +159,9 @@ CREATE INDEX "Market_owner_idx" ON "Market"("owner");
 CREATE INDEX "Market_createdAt_idx" ON "Market"("createdAt");
 
 -- CreateIndex
+CREATE INDEX "Market_totalCreatorFees_idx" ON "Market"("totalCreatorFees");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Transaction_signature_key" ON "Transaction"("signature");
 
 -- CreateIndex
@@ -184,6 +199,9 @@ CREATE UNIQUE INDEX "User_walletAddress_key" ON "User"("walletAddress");
 
 -- CreateIndex
 CREATE INDEX "User_walletAddress_idx" ON "User"("walletAddress");
+
+-- CreateIndex
+CREATE INDEX "User_totalEarningsAsCreator_idx" ON "User"("totalEarningsAsCreator");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PlatformStats_date_key" ON "PlatformStats"("date");
