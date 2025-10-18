@@ -2,11 +2,11 @@
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Coins, BarChart3, Trophy, Briefcase, Plus, Menu, X, User, HandCoins, DollarSign } from 'lucide-react'
+import { Coins, BarChart3, Trophy, Briefcase, Plus, Menu, X, User,  DollarSign } from 'lucide-react'
 import { ThemeToggle } from './ThemeToggle'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
-
+import Image from 'next/image'
 export function Navbar() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -34,9 +34,16 @@ export function Navbar() {
             <motion.div
               whileHover={{ rotate: 360, scale: 1.1 }}
               transition={{ duration: 0.6 }}
-              className="w-10 h-10 bg-gradient-to-br from-purple-600 via-pink-600 to-green-300 rounded-xl flex items-center justify-center shadow-lg"
+              className="w-10 h-10 bg-gradient-to-b rounded-xl flex items-center justify-center shadow-lg"
             >
-              <HandCoins className="w-6 h-6 text-white" />
+              <Image
+                width={40}
+                height={40}
+                alt="logo"
+                src={
+                  'https://res.cloudinary.com/duns099gs/image/upload/v1760680167/Screenshot_2025-10-16_at_1.20.45_PM_yzhnnd.png'
+                }
+              />
             </motion.div>
             <span className="hidden sm:block font-bold text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent group-hover:from-pink-600 group-hover:to-purple-600 transition-all">
               Celebrity Exchange
