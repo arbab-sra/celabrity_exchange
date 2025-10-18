@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react' // ✅ Correct import
+import { useState } from 'react' 
 import { useParams } from 'next/navigation'
 import { useMarket } from '@/hoooks/useMarket'
 import { PriceChart } from '@/components/charts/priceChart'
@@ -33,8 +33,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 
 type TabId = 'trades' | 'holders' | 'about'
-
-// ✅ Properly typed tabs
 interface Tab {
   id: TabId
   label: string
@@ -52,7 +50,6 @@ export default function MarketDetailPage() {
   const marketAddress = params.id as string
   const { market, transactions, priceHistory, volumeData, holders, stats24h, loading, refresh } =
     useMarket(marketAddress)
-
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('trades') // ✅ Type-safe
 

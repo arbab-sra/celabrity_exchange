@@ -5,7 +5,40 @@ import { Toaster } from 'react-hot-toast'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ThemeProvider } from '@/providers/ThemeProvider'
 import LenisProvider from '@/components/SmoothScrollProvider'
-
+export const metadata = {
+  title: 'Celebrity Stock Exchange | Trade Tokens on Solana',
+  description: 'Trade celebrity tokens on Solana blockchain with real-time market data',
+  keywords: ['solana', 'token exchange', 'crypto trading', 'celebrity stocks' ,'arbab exchange' ,'crypto exchange'],
+  authors: [{ name: 'Arbab' }],
+  openGraph: {
+    title: 'Celebrity Stock Exchange',
+    description: 'Trade celebrity tokens on Solana blockchain',
+    url: 'https://exchange.arbab.fun',
+    siteName: 'Celebrity Exchange',
+    images: [
+      {
+        url: 'https://exchange.arbab.fun/og-image.png',
+        width: 1200,
+        height: 628,
+      },
+    ],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Celebrity Stock Exchange',
+    description: 'Trade celebrity tokens on Solana blockchain',
+    images: ['https://exchange.arbab.fun/og-image.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
+}
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
