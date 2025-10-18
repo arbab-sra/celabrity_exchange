@@ -256,7 +256,7 @@ export function BuyTokensDialog({ market, onSuccess }: BuyTokensDialogProps) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-md h-full  overflow-y-scroll no-scrollbar sm:h-auto sm:max-h-[90vh]">
+      <DialogContent className="max-w-md h-full  overflow-y-scroll  sm:h-auto sm:max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="text-2xl">Buy {market.symbol} Tokens</DialogTitle>
           <DialogDescription>Purchase {market.name} tokens using SOL from your wallet</DialogDescription>
