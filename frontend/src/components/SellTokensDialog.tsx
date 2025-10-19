@@ -5,7 +5,7 @@ import { useWallet, useConnection } from '@solana/wallet-adapter-react'
 import { Transaction } from '@solana/web3.js'
 import { api } from '@/lib/api'
 import { Market } from '@/types'
-import { DollarSign, Loader2, Info } from 'lucide-react'
+import { DollarSign, Loader2, Info, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function SellTokensDialog({ market, onSuccess }: { market: Market; onSuccess: () => void }) {
@@ -14,10 +14,11 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
   const [amount, setAmount] = useState('1')
   const [loading, setLoading] = useState(false)
   const [priceEstimate, setPriceEstimate] = useState<any>(null)
+  const [slippagePercent, setSlippagePercent] = useState(2) // ✅ NEW: Default 2% for volatile tokens
 
   const priceInSOL = Number(market.currentPrice) / 1e9
 
-  // ✅ NEW: Fetch real-time price estimate
+  // Fetch price estimate
   useEffect(() => {
     const fetchEstimate = async () => {
       if (!amount || Number(amount) <= 0) return
@@ -48,14 +49,33 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
     const loadingToast = toast.loading('Preparing sell transaction...')
 
     try {
-      console.log('📝 Preparing sell transaction...')
-      const prepared = await api.prepareSellTransaction({
+      console.log(`📝 Preparing sell with ${slippagePercent}% slippage tolerance...`)
+
+      // ✅ First get the estimate
+      const estimate = await api.prepareSellTransaction({
         marketAddress: market.publicKey,
         userWallet: publicKey.toString(),
         amount: Number(amount),
       })
 
-      console.log('✅ Transaction prepared')
+      // ✅ Calculate min receive with user's slippage tolerance
+      const userReceives = estimate.data.userReceives
+      const minReceiveLamports = Math.floor(userReceives * (1 - slippagePercent / 100))
+
+      console.log('💰 Slippage calculation:')
+      console.log('  Expected receive:', userReceives, 'lamports')
+      console.log('  Slippage tolerance:', slippagePercent, '%')
+      console.log('  Min receive:', minReceiveLamports, 'lamports')
+
+      // ✅ Get final transaction with slippage-adjusted minimum
+      const prepared = await api.prepareSellTransaction({
+        marketAddress: market.publicKey,
+        userWallet: publicKey.toString(),
+        amount: Number(amount),
+        minReceiveLamports: minReceiveLamports, // ✅ Pass adjusted minimum
+      })
+
+      console.log('✅ Transaction prepared with slippage protection')
       toast.loading('Requesting wallet signature...', { id: loadingToast })
 
       const transaction = Transaction.from(Buffer.from(prepared.data.transaction, 'base64'))
@@ -105,10 +125,39 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
       console.error('❌ Sell error:', error)
 
       let errorMessage = 'Failed to sell tokens'
+
       if (error.message?.includes('User rejected')) {
         errorMessage = 'Transaction cancelled'
       } else if (error.message?.includes('insufficient')) {
         errorMessage = 'Insufficient token balance'
+      } else if (error.message?.includes('0x1772') || error.message?.includes('SlippageExceeded')) {
+        errorMessage = `Price moved beyond ${slippagePercent}% slippage tolerance`
+        toast.error(errorMessage, { id: loadingToast, duration: 6000 })
+
+        // ✅ Smart suggestion to increase slippage
+        if (slippagePercent < 5) {
+          setTimeout(() => {
+            toast(
+              (t) => (
+                <div className="flex flex-col gap-2 p-2">
+                  <p className="font-semibold text-sm">💡 Price is volatile!</p>
+                  <p className="text-xs text-gray-600">Try {slippagePercent + 1}% slippage for this token</p>
+                  <button
+                    onClick={() => {
+                      setSlippagePercent(slippagePercent + 1)
+                      toast.dismiss(t.id)
+                    }}
+                    className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700"
+                  >
+                    Set to {slippagePercent + 1}%
+                  </button>
+                </div>
+              ),
+              { duration: 10000 },
+            )
+          }, 500)
+        }
+        return
       } else if (error.message?.includes('Transaction failed')) {
         errorMessage = 'Transaction failed on-chain. Please try again.'
       } else if (error.message) {
@@ -142,7 +191,38 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
           />
         </div>
 
-        {/* ✅ NEW: Bonding Curve Sell Breakdown */}
+        {/* ✅ NEW: Slippage Tolerance Control */}
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Slippage Tolerance
+            </span>
+            <span className="text-lg font-bold text-purple-600 dark:text-purple-400">{slippagePercent}%</span>
+          </div>
+
+          <div className="grid grid-cols-5 gap-2 mb-2">
+            {[0.5, 1, 2, 3, 5].map((percent) => (
+              <button
+                key={percent}
+                onClick={() => setSlippagePercent(percent)}
+                className={`px-2 py-2 rounded text-sm font-medium transition ${
+                  slippagePercent === percent
+                    ? 'bg-purple-600 text-white shadow-lg'
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-purple-100 dark:hover:bg-gray-600'
+                }`}
+              >
+                {percent}%
+              </button>
+            ))}
+          </div>
+
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+            💡 Popular tokens need 2-3%. Low volume tokens can use 0.5-1%.
+          </p>
+        </div>
+
+        {/* Price Estimate Display */}
         <div className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-lg p-4 space-y-3 text-sm border border-red-200 dark:border-red-700">
           <div className="flex items-center gap-2 text-red-700 dark:text-red-300 font-semibold">
             <Info className="w-4 h-4" />
@@ -181,17 +261,25 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
                 </div>
               </div>
 
-              <div className="border-t border-red-300 dark:border-red-600 pt-3 flex justify-between">
-                <span className="font-bold text-gray-900 dark:text-white">You Receive</span>
-                <span className="font-bold text-lg text-green-600 dark:text-green-400">
-                  {priceEstimate.userReceivesSOL.toFixed(6)} SOL
-                </span>
+              <div className="border-t border-red-300 dark:border-red-600 pt-3 space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-bold text-gray-900 dark:text-white">Expected Receive</span>
+                  <span className="font-bold text-green-600 dark:text-green-400">
+                    {priceEstimate.userReceivesSOL.toFixed(6)} SOL
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-600 dark:text-gray-400">Minimum (with {slippagePercent}% slippage)</span>
+                  <span className="font-semibold text-gray-700 dark:text-gray-300">
+                    {(priceEstimate.userReceivesSOL * (1 - slippagePercent / 100)).toFixed(6)} SOL
+                  </span>
+                </div>
               </div>
 
-              {/* ✅ NEW: Price impact warning */}
-              {priceEstimate.estimatedReceive / Number(amount) < Number(market.currentPrice) * 0.95 && (
+              {/* Price impact warning */}
+              {priceEstimate.estimatedReceive / Number(amount) < Number(market.currentPrice) * 0.93 && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded p-2 text-xs text-yellow-800 dark:text-yellow-300">
-                  ⚠️ High price impact due to bonding curve. Consider selling smaller amounts.
+                  ⚠️ Large price impact! Try selling {Math.floor(Number(amount) / 2)} tokens instead.
                 </div>
               )}
             </>

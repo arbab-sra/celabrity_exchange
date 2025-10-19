@@ -69,7 +69,7 @@ export class TransactionService {
       console.error("❌ Failed to load server keypair:", error.message);
       throw error;
     }
-    
+
     this.platformFeeWallet = new PublicKey(
       process.env.PLATFORM_FEE_WALLET || this.serverKeypair.publicKey.toString()
     );
@@ -284,17 +284,34 @@ export class TransactionService {
       return BASE_PRICE;
     }
 
-    const exponent = (circulatingSupply * K_FACTOR) / SCALE_FACTOR;
+    // ✅ CRITICAL FIX: Use integer division like Rust (no floating point)
+    const exponent = Math.floor((circulatingSupply * K_FACTOR) / SCALE_FACTOR);
 
-    // Approximate e^x for small x using Taylor series
+    let price: number;
+
     if (exponent < 10) {
+      // ✅ Match Rust exactly: integer arithmetic only
       const multiplier =
-        10000 + exponent * 10000 + (exponent * exponent * 5000) / 10000;
-      return Math.floor((BASE_PRICE * multiplier) / 10000);
+        10000 +
+        exponent * 10000 +
+        Math.floor((exponent * exponent * 5000) / 10000);
+      price = Math.floor((BASE_PRICE * multiplier) / 10000);
     } else {
-      // For larger exponents, use exponential growth
-      return Math.floor(BASE_PRICE * Math.pow(2, Math.min(exponent, 20)));
+      // ✅ Use same power calculation as Rust
+      const cappedExponent = Math.min(exponent, 20);
+      price = Math.floor(BASE_PRICE * Math.pow(2, cappedExponent));
     }
+
+    const finalPrice = Math.max(price, BASE_PRICE);
+
+    // ✅ Add logging for debugging
+    console.log(`🔢 Price calculation for supply ${circulatingSupply}:`, {
+      exponent,
+      price,
+      finalPrice,
+    });
+
+    return finalPrice;
   }
 
   private calculateBuyCost(fromSupply: number, toSupply: number): number {
@@ -930,7 +947,7 @@ export class TransactionService {
       console.log("👤 Wallet:", userWallet);
       console.log("🔢 Amount:", amount);
 
-      // Wait for confirmation
+      // Wait for confirmation with 'confirmed' commitment (best practice)
       await this.connection.confirmTransaction(signature, "confirmed");
       console.log("✅ Transaction confirmed on-chain");
 
@@ -943,32 +960,80 @@ export class TransactionService {
         throw new Error("Transaction failed or not found");
       }
 
-      // Get current market price
-      const marketAccountInfo = await this.connection.getAccountInfo(
-        new PublicKey(marketAddress)
-      );
-      if (!marketAccountInfo) {
-        throw new Error("Market not found");
+      // ✅ Get market from database for circulating supply
+      const marketDb = await prisma.market.findUnique({
+        where: { publicKey: marketAddress },
+      });
+
+      if (!marketDb) {
+        throw new Error("Market not found in database");
       }
 
-      const currentPrice = marketAccountInfo.data.readBigUInt64LE(136);
-      const totalValue = Number(currentPrice) * amount;
-      const platformFee = Math.floor(totalValue * 0.01);
+      // ✅ Use database circulating supply for calculation
+      const circulatingSupply = Number(marketDb.circulatingSupply);
 
-      console.log("💰 Price at time of sell:", Number(currentPrice));
-      console.log("💵 Total value:", totalValue);
-      console.log("💵 Platform fee:", platformFee);
+      console.log("📊 Market state before sell:");
+      console.log("  Circulating Supply:", circulatingSupply);
 
-      // ✅ SAVE SELL TRANSACTION TO DATABASE
+      // ✅ CRITICAL FIX: Calculate sell value using bonding curve
+      const totalValue = this.calculateSellValue(
+        circulatingSupply,
+        circulatingSupply - amount
+      );
+
+      // ✅ Calculate new price after sell (supply decreased)
+      const currentPrice = this.calculateBondingCurvePrice(
+        circulatingSupply - amount
+      );
+
+      // ✅ Calculate fees with 70/30 split
+      const totalFee = Math.floor(totalValue * 0.01);
+      const platformFee = Math.floor(totalFee * 0.7); // 70%
+      const creatorFee = totalFee - platformFee; // 30% (avoid rounding issues)
+
+      console.log("💰 Sell transaction details:");
+      console.log(
+        "  Total Value:",
+        totalValue,
+        "lamports",
+        `(${(totalValue / 1e9).toFixed(6)} SOL)`
+      );
+      console.log(
+        "  New Price:",
+        currentPrice,
+        "lamports",
+        `(${(currentPrice / 1e9).toFixed(6)} SOL)`
+      );
+      console.log("  Total Fee (1%):", totalFee, "lamports");
+      console.log("  Platform Fee (70%):", platformFee, "lamports");
+      console.log("  Creator Fee (30%):", creatorFee, "lamports");
+      console.log("  User Received:", totalValue - totalFee, "lamports");
+
+      // ✅ CRITICAL: Update circulating supply in database (this was missing!)
+      await prisma.market.update({
+        where: { publicKey: marketAddress },
+        data: {
+          circulatingSupply: { decrement: BigInt(amount) }, // Decrease supply
+          currentPrice: BigInt(currentPrice), // Update to new price
+          updatedAt: new Date(),
+        },
+      });
+
+      console.log("✅ Market updated:");
+      console.log("  New Circulating Supply:", circulatingSupply - amount);
+      console.log("  New Current Price:", currentPrice);
+
+      // ✅ Save sell transaction with fee split
       await this.saveTransactionToDb(
         signature,
         marketAddress,
         "SELL",
         userWallet,
         amount,
-        Number(currentPrice),
+        currentPrice,
         totalValue,
-        platformFee
+        platformFee,
+        creatorFee // ✅ CRITICAL: Pass creator fee
       );
 
       console.log("✅ Sell transaction confirmed and saved to database");
@@ -976,6 +1041,15 @@ export class TransactionService {
       return {
         success: true,
         signature,
+        amount,
+        totalValue,
+        totalValueSOL: (totalValue / 1e9).toFixed(6),
+        platformFee,
+        creatorFee,
+        userReceived: totalValue - totalFee,
+        userReceivedSOL: ((totalValue - totalFee) / 1e9).toFixed(6),
+        newCirculatingSupply: circulatingSupply - amount,
+        newPrice: currentPrice,
         message: "Sell transaction confirmed and saved to database",
       };
     } catch (error: any) {
@@ -983,6 +1057,7 @@ export class TransactionService {
       throw error;
     }
   }
+
   async prepareSellTransaction(
     marketAddress: string,
     userWallet: string,
@@ -991,6 +1066,10 @@ export class TransactionService {
   ) {
     try {
       console.log("\n💸 Preparing Sell Transaction...");
+      console.log("📍 Market:", marketAddress);
+      console.log("👤 User:", userWallet);
+      console.log("🔢 Amount:", amount);
+      console.log("💵 Min Receive Override:", minReceiveLamports || "AUTO");
 
       const marketPubkey = new PublicKey(marketAddress);
       const userPubkey = new PublicKey(userWallet);
@@ -1004,6 +1083,7 @@ export class TransactionService {
         throw new Error("Market not found in database");
       }
 
+      // Get market account info from blockchain
       const marketAccountInfo = await this.connection.getAccountInfo(
         marketPubkey
       );
@@ -1011,14 +1091,32 @@ export class TransactionService {
         throw new Error("Market not found on-chain");
       }
 
+      // ✅ CRITICAL: Extract mint pubkey from account data
       const data = marketAccountInfo.data;
-      const mintPubkey = new PublicKey(data.slice(40, 72));
-      const circulatingSupply = Number(marketDb.circulatingSupply);
+      const mintPubkey = new PublicKey(data.slice(40, 72)); // Extract mint address
+
+      // ✅ Get LIVE on-chain circulating supply (position 168 in account data)
+      const onChainCirculatingSupply = Number(data.readBigUInt64LE(168));
+      const circulatingSupply =
+        onChainCirculatingSupply || Number(marketDb.circulatingSupply);
 
       console.log("📊 Current State:");
-      console.log("  Circulating Supply:", circulatingSupply);
+      console.log("  Mint:", mintPubkey.toString());
+      console.log(
+        "  DB Circulating Supply:",
+        Number(marketDb.circulatingSupply)
+      );
+      console.log("  On-Chain Circulating Supply:", onChainCirculatingSupply);
+      console.log("  Using for calculation:", circulatingSupply);
 
-      // ✅ Calculate sell value using bonding curve
+      // ✅ Validate sell amount
+      if (amount > circulatingSupply) {
+        throw new Error(
+          `Cannot sell ${amount} tokens. Only ${circulatingSupply} in circulation.`
+        );
+      }
+
+      // ✅ Calculate sell value using bonding curve (matches Rust)
       const totalValue = this.calculateSellValue(
         circulatingSupply,
         circulatingSupply - amount
@@ -1026,17 +1124,43 @@ export class TransactionService {
 
       const totalFee = Math.floor(totalValue * 0.01);
       const platformFee = Math.floor(totalFee * 0.7);
-      const creatorFee = Math.floor(totalFee * 0.3);
+      const creatorFee = totalFee - platformFee; // ✅ Ensure no rounding issues
       const userReceives = totalValue - totalFee;
-      const minReceive = minReceiveLamports || Math.floor(userReceives * 0.95);
+
+      // ✅ CRITICAL: Use provided minReceiveLamports OR calculate with safety margin
+      const minReceive =
+        minReceiveLamports !== undefined
+          ? minReceiveLamports
+          : Math.floor(userReceives * 0.8); // 20% default safety margin
 
       console.log("💰 Bonding Curve Calculation:");
-      console.log("  Total Value:", totalValue, "lamports");
+      console.log(
+        "  Total Value:",
+        totalValue,
+        "lamports",
+        `(${(totalValue / 1e9).toFixed(6)} SOL)`
+      );
       console.log("  Total Fee (1%):", totalFee, "lamports");
       console.log("  Platform Fee (70%):", platformFee, "lamports");
       console.log("  Creator Fee (30%):", creatorFee, "lamports");
-      console.log("  User Receives:", userReceives, "lamports");
+      console.log(
+        "  User Receives:",
+        userReceives,
+        "lamports",
+        `(${(userReceives / 1e9).toFixed(6)} SOL)`
+      );
+      console.log(
+        "  Min Receive:",
+        minReceive,
+        "lamports",
+        `(${(minReceive / 1e9).toFixed(6)} SOL)`
+      );
+      console.log(
+        "  Safety Margin:",
+        ((1 - minReceive / userReceives) * 100).toFixed(2) + "%"
+      );
 
+      // Derive PDAs
       const [escrowAuthority] = PublicKey.findProgramAddressSync(
         [Buffer.from("escrow"), marketPubkey.toBuffer()],
         PROGRAM_ID
@@ -1047,6 +1171,7 @@ export class TransactionService {
         PROGRAM_ID
       );
 
+      // Get token accounts
       const escrowTokenAccount = await getAssociatedTokenAddress(
         mintPubkey,
         escrowAuthority,
@@ -1058,14 +1183,15 @@ export class TransactionService {
         userPubkey
       );
 
+      // Build sell instruction
       const discriminator = DISCRIMINATORS.sellTokens;
       const instructionData = Buffer.concat([
         discriminator,
         this.serializeU64(amount),
-        this.serializeU64(minReceive),
+        this.serializeU64(minReceive), // ✅ Use calculated minReceive
       ]);
 
-      // ✅ NEW: Add creator wallet
+      // ✅ Get creator wallet
       const creatorWallet = new PublicKey(marketDb.owner);
 
       const keys = [
@@ -1076,7 +1202,7 @@ export class TransactionService {
         { pubkey: treasury, isSigner: false, isWritable: true },
         { pubkey: userTokenAccount, isSigner: false, isWritable: true },
         { pubkey: this.platformFeeWallet, isSigner: false, isWritable: true },
-        { pubkey: creatorWallet, isSigner: false, isWritable: true }, // ✅ NEW
+        { pubkey: creatorWallet, isSigner: false, isWritable: true },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ];
@@ -1088,12 +1214,15 @@ export class TransactionService {
       });
 
       const transaction = new Transaction().add(instruction);
+
+      // Get recent blockhash
       const { blockhash } = await this.connection.getLatestBlockhash(
         "finalized"
       );
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = userPubkey;
 
+      // Serialize transaction
       const serializedTx = transaction
         .serialize({
           requireAllSignatures: false,
@@ -1101,7 +1230,7 @@ export class TransactionService {
         })
         .toString("base64");
 
-      console.log("✅ Sell transaction prepared");
+      console.log("✅ Sell transaction prepared successfully");
 
       return {
         transaction: serializedTx,
@@ -1118,6 +1247,7 @@ export class TransactionService {
         userReceivesSOL: userReceives / 1e9,
         minReceive: minReceive,
         minReceiveSOL: minReceive / 1e9,
+        circulatingSupply: circulatingSupply,
         creatorWallet: marketDb.owner,
         instructions:
           "User must sign this transaction with their wallet and broadcast it.",
@@ -1127,6 +1257,7 @@ export class TransactionService {
       throw new Error(`Failed to prepare sell transaction: ${error.message}`);
     }
   }
+
   async confirmBuyTransaction(
     signature: string,
     marketAddress: string,

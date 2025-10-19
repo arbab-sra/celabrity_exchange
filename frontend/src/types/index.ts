@@ -295,6 +295,7 @@ export interface PrepareSellTransactionRequest {
   userWallet: string
   amount: number
   minReceive?: number
+  minReceiveLamports?:number
 }
 
 export interface PrepareSellTransactionResponse {

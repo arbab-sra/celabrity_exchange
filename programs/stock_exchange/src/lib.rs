@@ -9,7 +9,6 @@ use mpl_token_metadata::types::DataV2;
 
 declare_id!("6RYHxeQ4turMqubZkmLg4UB9AeNRbgW9tR5L2uQ7VJ4f");
 
-// ✅ UPDATE THIS TO YOUR WALLET ADDRESS
 pub const PLATFORM_FEE_WALLET: &str = "2XchL7rEESZFJPEUgR4RjvduHdTR9J8ANqvsuzqmLUkv";
 pub const CREATION_FEE: u64 = 100_000_000; // 0.1 SOL
 pub const TRANSACTION_FEE_BPS: u64 = 100; // 1% = 100 basis points
