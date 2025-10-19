@@ -85,115 +85,119 @@ export function BuyTokensDialog({ market, onSuccess }: BuyTokensDialogProps) {
     }
   }
 
- const handleBuy = async () => {
-   if (!publicKey || !signTransaction) {
-     toast.error('Please connect your wallet!')
-     return
-   }
+  const handleBuy = async () => {
+    if (!publicKey || !signTransaction) {
+      toast.error('Please connect your wallet!')
+      return
+    }
 
-   setLoading(true)
-   const loadingToast = toast.loading('Preparing buy transaction...')
+    setLoading(true)
+    const loadingToast = toast.loading('Preparing buy transaction...')
 
-   try {
-     console.log('📝 Preparing buy transaction...')
+    try {
+      console.log('📝 Preparing buy transaction...')
 
-     // Prepare transaction from backend
-     const prepared = await api.prepareBuyTransaction({
-       marketAddress: market.publicKey,
-       userWallet: publicKey.toString(),
-       amount: Number(amount),
-     })
+      // Prepare transaction from backend
+      const prepared = await api.prepareBuyTransaction({
+        marketAddress: market.publicKey,
+        userWallet: publicKey.toString(),
+        amount: Number(amount),
+      })
 
-     console.log('✅ Transaction prepared')
-     console.log('💰 Total cost:', prepared.data.totalWithFeesSOL, 'SOL')
+      console.log('✅ Transaction prepared')
+      console.log('💰 Total cost:', prepared.data.totalWithFeesSOL, 'SOL')
 
-     toast.loading('Requesting wallet signature...', { id: loadingToast })
+      toast.loading('Requesting wallet signature...', { id: loadingToast })
 
-     const transaction = Transaction.from(Buffer.from(prepared.data.transaction, 'base64'))
+      const transaction = Transaction.from(Buffer.from(prepared.data.transaction, 'base64'))
 
-     // ✅ CRITICAL FIX FOR PHANTOM: Get FRESH blockhash right before signing
-     console.log('🔄 Fetching fresh blockhash...')
-     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
-     transaction.recentBlockhash = blockhash
-     transaction.feePayer = publicKey
+      // ✅ CRITICAL FIX FOR PHANTOM: Get FRESH blockhash right before signing
+      console.log('🔄 Fetching fresh blockhash...')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
+      transaction.recentBlockhash = blockhash
+      transaction.feePayer = publicKey
 
-     console.log('🔑 Fresh blockhash:', blockhash)
-     console.log('📏 Last valid height:', lastValidBlockHeight)
+      console.log('🔑 Fresh blockhash:', blockhash)
+      console.log('📏 Last valid height:', lastValidBlockHeight)
 
-     console.log('✍️ Requesting signature...')
-     const signedTransaction = await signTransaction(transaction)
+      console.log('✍️ Requesting signature...')
+      const signedTransaction = await signTransaction(transaction)
 
-     toast.loading('Sending transaction...', { id: loadingToast })
+      toast.loading('Sending transaction...', { id: loadingToast })
 
-     console.log('📤 Broadcasting transaction...')
+      console.log('📤 Broadcasting transaction...')
 
-     // ✅ CRITICAL FIX FOR PHANTOM: Use proper send options
-     const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
-       skipPreflight: false, // Phantom needs this
-       preflightCommitment: 'finalized', // ✅ Changed from 'confirmed'
-       maxRetries: 3, // ✅ NEW: Retry up to 3 times
-     })
+      // ✅ CRITICAL FIX FOR PHANTOM: Use proper send options
+      const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+        skipPreflight: false, // Phantom needs this
+        preflightCommitment: 'finalized', // ✅ Changed from 'confirmed'
+        maxRetries: 3, // ✅ NEW: Retry up to 3 times
+      })
 
-     console.log('📝 Transaction signature:', signature)
-     toast.loading('Waiting for confirmation...', { id: loadingToast })
+      console.log('📝 Transaction signature:', signature)
+      toast.loading('Waiting for confirmation...', { id: loadingToast })
 
-     // ✅ CRITICAL FIX: Use the SAME blockhash we used for signing
-     await connection.confirmTransaction(
-       {
-         signature,
-         blockhash, // ✅ Use the fresh blockhash
-         lastValidBlockHeight,
-       },
-       'confirmed',
-     )
+      // ✅ CRITICAL FIX: Use the SAME blockhash we used for signing
+      await connection.confirmTransaction(
+        {
+          signature,
+          blockhash, // ✅ Use the fresh blockhash
+          lastValidBlockHeight,
+        },
+        'confirmed',
+      )
 
-     console.log('✅ Transaction confirmed on-chain')
-     toast.loading('Updating database...', { id: loadingToast })
+      console.log('✅ Transaction confirmed on-chain')
+      toast.loading('Updating database...', { id: loadingToast })
 
-     console.log('💾 Confirming with backend...')
-     const result = await api.confirmBuyTransaction({
-       signature,
-       marketAddress: market.publicKey,
-       userWallet: publicKey.toString(),
-       amount: Number(amount),
-     })
+      console.log('💾 Confirming with backend...')
+      const result = await api.confirmBuyTransaction({
+        signature,
+        marketAddress: market.publicKey,
+        userWallet: publicKey.toString(),
+        amount: Number(amount),
+      })
 
-     console.log('✅ Buy confirmed:', result)
+      console.log('✅ Buy confirmed:', result)
 
-     toast.success(`✅ Purchased ${amount} tokens successfully!`, { id: loadingToast, duration: 5000 })
+      toast.success(`✅ Purchased ${amount} tokens successfully!`, { id: loadingToast, duration: 5000 })
 
-     await onSuccess()
-     setAmount('1')
-   } catch (error: any) {
-     console.error('❌ Buy error:', error)
+      // ✅ FIX: Check if onSuccess exists before calling
+      if (onSuccess) {
+        await onSuccess()
+      }
 
-     let errorMessage = 'Failed to buy tokens'
+      setAmount('') // ✅ Clear amount
+      setOpen(false) // ✅ Close dialog
+    } catch (error: any) {
+      console.error('❌ Buy error:', error)
 
-     // ✅ Better error detection for Phantom
-     if (error.message?.includes('User rejected') || error.message?.includes('User canceled')) {
-       errorMessage = 'Transaction cancelled'
-     } else if (error.message?.includes('insufficient')) {
-       errorMessage = 'Insufficient SOL balance'
-     } else if (error.message?.includes('already been processed')) {
-       errorMessage = 'Transaction already processed. Please refresh and try again.'
-       toast.error(errorMessage, { id: loadingToast, duration: 5000 })
-       // ✅ Auto-refresh market data
-       setTimeout(() => window.location.reload(), 2000)
-       return
-     } else if (error.message?.includes('Blockhash not found')) {
-       errorMessage = 'Transaction expired. Please try again.'
-     } else if (error.message?.includes('Transaction simulation failed')) {
-       errorMessage = 'Simulation failed. Check your balance and try again.'
-     } else if (error.message) {
-       errorMessage = error.message
-     }
+      let errorMessage = 'Failed to buy tokens'
 
-     toast.error(errorMessage, { id: loadingToast })
-   } finally {
-     setLoading(false)
-   }
- }
+      // ✅ Better error detection for Phantom
+      if (error.message?.includes('User rejected') || error.message?.includes('User canceled')) {
+        errorMessage = 'Transaction cancelled'
+      } else if (error.message?.includes('insufficient')) {
+        errorMessage = 'Insufficient SOL balance'
+      } else if (error.message?.includes('already been processed')) {
+        errorMessage = 'Transaction already processed. Please refresh and try again.'
+        toast.error(errorMessage, { id: loadingToast, duration: 5000 })
+        // ✅ Auto-refresh market data
+        setTimeout(() => window.location.reload(), 2000)
+        return
+      } else if (error.message?.includes('Blockhash not found')) {
+        errorMessage = 'Transaction expired. Please try again.'
+      } else if (error.message?.includes('Transaction simulation failed')) {
+        errorMessage = 'Simulation failed. Check your balance and try again.'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
 
+      toast.error(errorMessage, { id: loadingToast })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleQuickAmount = (percentage: number) => {
     // Quick buy buttons for common amounts
@@ -230,7 +234,7 @@ export function BuyTokensDialog({ market, onSuccess }: BuyTokensDialogProps) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-md h-full  overflow-y-scroll  sm:h-auto sm:max-h-[90vh]">
+      <DialogContent className="max-w-md h-full overflow-y-scroll sm:h-auto sm:max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="text-2xl">Buy {market.symbol} Tokens</DialogTitle>
           <DialogDescription>Purchase {market.name} tokens using SOL from your wallet</DialogDescription>
