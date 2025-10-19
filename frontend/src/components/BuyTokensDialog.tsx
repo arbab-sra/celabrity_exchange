@@ -47,18 +47,13 @@ interface PriceImpact {
 export function BuyTokensDialog({ market, onSuccess }: BuyTokensDialogProps) {
   const { publicKey, signTransaction, sendTransaction } = useWallet()
   const { connection } = useConnection()
-
-  // UI State
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [calculatingPrice, setCalculatingPrice] = useState(false)
-
-  // Price Impact State
   const [priceImpact, setPriceImpact] = useState<PriceImpact | null>(null)
   const [priceError, setPriceError] = useState<string | null>(null)
 
-  // Calculate price impact when amount changes
   useEffect(() => {
     if (amount && Number(amount) > 0 && !isNaN(Number(amount))) {
       calculatePriceImpact()
@@ -90,136 +85,115 @@ export function BuyTokensDialog({ market, onSuccess }: BuyTokensDialogProps) {
     }
   }
 
-  const handleBuy = async () => {
-    if (!publicKey || !signTransaction) {
-      toast.error('Please connect your wallet!')
-      return
-    }
+ const handleBuy = async () => {
+   if (!publicKey || !signTransaction) {
+     toast.error('Please connect your wallet!')
+     return
+   }
 
-    if (!amount || Number(amount) <= 0) {
-      toast.error('Please enter a valid amount')
-      return
-    }
+   setLoading(true)
+   const loadingToast = toast.loading('Preparing buy transaction...')
 
-    const amountNum = Number(amount)
-    if (isNaN(amountNum) || amountNum <= 0) {
-      toast.error('Invalid amount')
-      return
-    }
+   try {
+     console.log('📝 Preparing buy transaction...')
 
-    setLoading(true)
+     // Prepare transaction from backend
+     const prepared = await api.prepareBuyTransaction({
+       marketAddress: market.publicKey,
+       userWallet: publicKey.toString(),
+       amount: Number(amount),
+     })
 
-    try {
-      // Step 1: Prepare transaction
-      console.log('📤 Preparing buy transaction...')
-      toast.loading('Preparing transaction...', { id: 'buy-tx' })
+     console.log('✅ Transaction prepared')
+     console.log('💰 Total cost:', prepared.data.totalWithFeesSOL, 'SOL')
 
-      const response = await api.prepareBuyTransaction({
-        marketAddress: market.publicKey,
-        userWallet: publicKey.toString(),
-        amount: amountNum,
-      })
+     toast.loading('Requesting wallet signature...', { id: loadingToast })
 
-      console.log('✅ Transaction prepared:', response.data)
+     const transaction = Transaction.from(Buffer.from(prepared.data.transaction, 'base64'))
 
-      // Step 2: Deserialize transaction
-      const txBuffer = Buffer.from(response.data.transaction, 'base64')
-      const transaction = Transaction.from(txBuffer)
+     // ✅ CRITICAL FIX FOR PHANTOM: Get FRESH blockhash right before signing
+     console.log('🔄 Fetching fresh blockhash...')
+     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
+     transaction.recentBlockhash = blockhash
+     transaction.feePayer = publicKey
 
-      // Step 3: Sign transaction
-      console.log('✍️ Requesting wallet signature...')
-      toast.loading('Please approve in your wallet...', { id: 'buy-tx' })
+     console.log('🔑 Fresh blockhash:', blockhash)
+     console.log('📏 Last valid height:', lastValidBlockHeight)
 
-      const signedTx = await signTransaction(transaction)
+     console.log('✍️ Requesting signature...')
+     const signedTransaction = await signTransaction(transaction)
 
-      // Step 4: Send transaction
-      console.log('📤 Sending transaction...')
-      toast.loading('Sending transaction...', { id: 'buy-tx' })
+     toast.loading('Sending transaction...', { id: loadingToast })
 
-      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
-      })
+     console.log('📤 Broadcasting transaction...')
 
-      console.log('⏳ Confirming transaction...')
-      console.log('🔗 Signature:', signature)
-      toast.loading('Confirming transaction...', { id: 'buy-tx' })
+     // ✅ CRITICAL FIX FOR PHANTOM: Use proper send options
+     const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+       skipPreflight: false, // Phantom needs this
+       preflightCommitment: 'finalized', // ✅ Changed from 'confirmed'
+       maxRetries: 3, // ✅ NEW: Retry up to 3 times
+     })
 
-      // Step 5: Confirm transaction
-      const confirmation = await connection.confirmTransaction(signature, 'confirmed')
+     console.log('📝 Transaction signature:', signature)
+     toast.loading('Waiting for confirmation...', { id: loadingToast })
 
-      if (confirmation.value.err) {
-        throw new Error('Transaction failed on blockchain')
-      }
+     // ✅ CRITICAL FIX: Use the SAME blockhash we used for signing
+     await connection.confirmTransaction(
+       {
+         signature,
+         blockhash, // ✅ Use the fresh blockhash
+         lastValidBlockHeight,
+       },
+       'confirmed',
+     )
 
-      console.log('✅ Transaction confirmed!')
-      toast.success('Transaction confirmed!', { id: 'buy-tx' })
+     console.log('✅ Transaction confirmed on-chain')
+     toast.loading('Updating database...', { id: loadingToast })
 
-      // Step 6: Save to database
-      console.log('💾 Saving to database...')
-      toast.loading('Updating records...', { id: 'buy-tx' })
+     console.log('💾 Confirming with backend...')
+     const result = await api.confirmBuyTransaction({
+       signature,
+       marketAddress: market.publicKey,
+       userWallet: publicKey.toString(),
+       amount: Number(amount),
+     })
 
-      try {
-        await api.confirmBuyTransaction({
-          signature,
-          marketAddress: market.publicKey,
-          userWallet: publicKey.toString(),
-          amount: amountNum,
-        })
-        console.log('✅ Saved to database')
-      } catch (dbError) {
-        console.error('❌ Database save failed:', dbError)
-        // Don't fail the whole transaction if DB save fails
-        toast('Transaction succeeded! Database update may be delayed.', {
-          icon: '⚠️',
-          id: 'buy-tx',
-        })
-      }
+     console.log('✅ Buy confirmed:', result)
 
-      // Success!
-      toast.success(`✅ Successfully bought ${formatNumber(amountNum)} ${market.symbol} tokens!`, {
-        id: 'buy-tx',
-        duration: 6000,
-        icon: '🎉',
-      })
+     toast.success(`✅ Purchased ${amount} tokens successfully!`, { id: loadingToast, duration: 5000 })
 
-      // Reset form
-      setAmount('')
-      setPriceImpact(null)
-      setOpen(false)
+     await onSuccess()
+     setAmount('1')
+   } catch (error: any) {
+     console.error('❌ Buy error:', error)
 
-      // Refresh data after a delay
-      if (onSuccess) {
-        setTimeout(onSuccess, 1500)
-      }
-    } catch (error:any) {
-      console.error('❌ Buy error:', error)
+     let errorMessage = 'Failed to buy tokens'
 
-      let errorMessage = 'Failed to buy tokens'
-      let errorIcon = '❌'
+     // ✅ Better error detection for Phantom
+     if (error.message?.includes('User rejected') || error.message?.includes('User canceled')) {
+       errorMessage = 'Transaction cancelled'
+     } else if (error.message?.includes('insufficient')) {
+       errorMessage = 'Insufficient SOL balance'
+     } else if (error.message?.includes('already been processed')) {
+       errorMessage = 'Transaction already processed. Please refresh and try again.'
+       toast.error(errorMessage, { id: loadingToast, duration: 5000 })
+       // ✅ Auto-refresh market data
+       setTimeout(() => window.location.reload(), 2000)
+       return
+     } else if (error.message?.includes('Blockhash not found')) {
+       errorMessage = 'Transaction expired. Please try again.'
+     } else if (error.message?.includes('Transaction simulation failed')) {
+       errorMessage = 'Simulation failed. Check your balance and try again.'
+     } else if (error.message) {
+       errorMessage = error.message
+     }
 
-      if (error.message?.includes('User rejected') || error.message?.includes('rejected')) {
-        errorMessage = 'Transaction cancelled by user'
-        errorIcon = '🚫'
-      } else if (error.message?.includes('insufficient') || error.message?.includes('Insufficient')) {
-        errorMessage = 'Insufficient SOL balance'
-        errorIcon = '💸'
-      } else if (error.message?.includes('blockhash')) {
-        errorMessage = 'Transaction expired. Please try again.'
-        errorIcon = '⏰'
-      } else if (error.message) {
-        errorMessage = error.message
-      }
+     toast.error(errorMessage, { id: loadingToast })
+   } finally {
+     setLoading(false)
+   }
+ }
 
-      toast.error(errorMessage, {
-        id: 'buy-tx',
-        duration: 5000,
-        icon: errorIcon,
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleQuickAmount = (percentage: number) => {
     // Quick buy buttons for common amounts

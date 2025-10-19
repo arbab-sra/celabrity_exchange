@@ -14,8 +14,7 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
   const [amount, setAmount] = useState('1')
   const [loading, setLoading] = useState(false)
   const [priceEstimate, setPriceEstimate] = useState<any>(null)
-  const [slippagePercent, setSlippagePercent] = useState(2) // ✅ NEW: Default 2% for volatile tokens
-
+  const [slippagePercent, setSlippagePercent] = useState(2)
   const priceInSOL = Number(market.currentPrice) / 1e9
 
   // Fetch price estimate
@@ -51,55 +50,63 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
     try {
       console.log(`📝 Preparing sell with ${slippagePercent}% slippage tolerance...`)
 
-      // ✅ First get the estimate
-      const estimate = await api.prepareSellTransaction({
+      // Get fresh estimate
+      const freshEstimate = await api.prepareSellTransaction({
         marketAddress: market.publicKey,
         userWallet: publicKey.toString(),
         amount: Number(amount),
       })
 
-      // ✅ Calculate min receive with user's slippage tolerance
-      const userReceives = estimate.data.userReceives
+      const userReceives = freshEstimate.data.userReceives
       const minReceiveLamports = Math.floor(userReceives * (1 - slippagePercent / 100))
 
-      console.log('💰 Slippage calculation:')
+      console.log('💰 Fresh calculation:')
       console.log('  Expected receive:', userReceives, 'lamports')
       console.log('  Slippage tolerance:', slippagePercent, '%')
       console.log('  Min receive:', minReceiveLamports, 'lamports')
 
-      // ✅ Get final transaction with slippage-adjusted minimum
+      // Get final transaction
       const prepared = await api.prepareSellTransaction({
         marketAddress: market.publicKey,
         userWallet: publicKey.toString(),
         amount: Number(amount),
-        minReceiveLamports: minReceiveLamports, // ✅ Pass adjusted minimum
+        minReceiveLamports: minReceiveLamports,
       })
 
-      console.log('✅ Transaction prepared with slippage protection')
       toast.loading('Requesting wallet signature...', { id: loadingToast })
 
       const transaction = Transaction.from(Buffer.from(prepared.data.transaction, 'base64'))
 
+      // ✅ CRITICAL FIX FOR PHANTOM: Get FRESH blockhash right before signing
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
+      transaction.recentBlockhash = blockhash
+      transaction.feePayer = publicKey
+
+      console.log('🔑 Fresh blockhash:', blockhash)
       console.log('✍️ Requesting signature...')
+
       const signedTransaction = await signTransaction(transaction)
 
       toast.loading('Sending transaction...', { id: loadingToast })
 
       console.log('📤 Broadcasting transaction...')
+
+      // ✅ CRITICAL FIX FOR PHANTOM: Use proper send options
       const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
+        skipPreflight: false, // Phantom needs this to be false
+        preflightCommitment: 'finalized', // ✅ Changed from 'confirmed'
+        maxRetries: 3, // ✅ NEW: Retry up to 3 times
       })
 
       console.log('📝 Transaction signature:', signature)
       toast.loading('Waiting for confirmation...', { id: loadingToast })
 
-      const latestBlockhash = await connection.getLatestBlockhash('confirmed')
+      // ✅ CRITICAL FIX: Use the SAME blockhash we used for signing
       await connection.confirmTransaction(
         {
           signature,
-          blockhash: latestBlockhash.blockhash,
-          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+          blockhash, // ✅ Use the fresh blockhash
+          lastValidBlockHeight,
         },
         'confirmed',
       )
@@ -107,7 +114,6 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
       console.log('✅ Transaction confirmed on-chain')
       toast.loading('Updating database...', { id: loadingToast })
 
-      console.log('💾 Confirming with backend...')
       const result = await api.confirmSellTransaction({
         signature,
         marketAddress: market.publicKey,
@@ -126,40 +132,57 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
 
       let errorMessage = 'Failed to sell tokens'
 
-      if (error.message?.includes('User rejected')) {
+      // ✅ Better error detection for Phantom
+      if (error.message?.includes('User rejected') || error.message?.includes('User canceled')) {
         errorMessage = 'Transaction cancelled'
       } else if (error.message?.includes('insufficient')) {
         errorMessage = 'Insufficient token balance'
+      } else if (error.message?.includes('already been processed')) {
+        errorMessage = 'Transaction already processed. Please refresh and try again.'
+        // ✅ Auto-refresh market data
+        setTimeout(() => window.location.reload(), 2000)
       } else if (error.message?.includes('0x1772') || error.message?.includes('SlippageExceeded')) {
-        errorMessage = `Price moved beyond ${slippagePercent}% slippage tolerance`
-        toast.error(errorMessage, { id: loadingToast, duration: 6000 })
+        errorMessage = `Price moved beyond ${slippagePercent}% slippage. This token is extremely volatile!`
+        toast.error(errorMessage, { id: loadingToast, duration: 8000 })
 
-        // ✅ Smart suggestion to increase slippage
-        if (slippagePercent < 5) {
+        if (slippagePercent < 20) {
           setTimeout(() => {
             toast(
               (t) => (
-                <div className="flex flex-col gap-2 p-2">
-                  <p className="font-semibold text-sm">💡 Price is volatile!</p>
-                  <p className="text-xs text-gray-600">Try {slippagePercent + 1}% slippage for this token</p>
-                  <button
-                    onClick={() => {
-                      setSlippagePercent(slippagePercent + 1)
-                      toast.dismiss(t.id)
-                    }}
-                    className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700"
-                  >
-                    Set to {slippagePercent + 1}%
-                  </button>
+                <div className="flex flex-col gap-2 p-3">
+                  <p className="font-bold text-sm text-red-600">⚠️ Highly Volatile Token!</p>
+                  <p className="text-xs text-gray-600">
+                    Try selling smaller amounts or use {slippagePercent + 5}% slippage.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setAmount(String(Math.max(1, Math.floor(Number(amount) / 2))))
+                        toast.dismiss(t.id)
+                      }}
+                      className="px-3 py-1.5 bg-orange-600 text-white rounded text-xs font-medium hover:bg-orange-700"
+                    >
+                      Sell Half ({Math.floor(Number(amount) / 2)})
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSlippagePercent(Math.min(20, slippagePercent + 5))
+                        toast.dismiss(t.id)
+                      }}
+                      className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700"
+                    >
+                      Use {Math.min(20, slippagePercent + 5)}%
+                    </button>
+                  </div>
                 </div>
               ),
-              { duration: 10000 },
+              { duration: 15000 },
             )
           }, 500)
         }
         return
-      } else if (error.message?.includes('Transaction failed')) {
-        errorMessage = 'Transaction failed on-chain. Please try again.'
+      } else if (error.message?.includes('Blockhash not found')) {
+        errorMessage = 'Transaction expired. Please try again.'
       } else if (error.message) {
         errorMessage = error.message
       }
