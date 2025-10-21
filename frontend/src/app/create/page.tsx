@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useWallet } from '@solana/wallet-adapter-react'
-import { Connection, Transaction } from '@solana/web3.js'
+import { useConnection, useWallet } from '@solana/wallet-adapter-react'
+import { Transaction } from '@solana/web3.js'
 import { api } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
@@ -13,7 +13,7 @@ export default function CreatePage() {
   const { publicKey, connected, signTransaction } = useWallet()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-
+  const { connection } = useConnection()
   const [formData, setFormData] = useState({
     name: '',
     symbol: '',
@@ -40,7 +40,7 @@ export default function CreatePage() {
     const loadingToast = toast.loading('Preparing transaction...')
 
     try {
-      // Step 1: Prepare the transaction (backend partially signs)
+      // Step 1: Prepare the transaction (backend partially signs with mint keypair)
       console.log('📝 Preparing market creation...')
       const prepared = await api.prepareCreateMarket({
         userWallet: publicKey.toString(),
@@ -60,26 +60,49 @@ export default function CreatePage() {
       // Step 2: Deserialize the transaction
       const transaction = Transaction.from(Buffer.from(prepared.data.transaction, 'base64'))
 
-      // Step 3: User signs with their wallet
+      // ❌ DON'T replace blockhash for multi-sig transactions!
+      // The server already signed with a blockhash, replacing it invalidates their signature
+
+      // ✅ OPTIONAL: Check if blockhash is still valid (best practice)
+      const { value: latestBlockhash } = await connection.getLatestBlockhashAndContext('finalized')
+      const currentSlot = await connection.getSlot('finalized')
+
+      console.log('📊 Transaction Details:')
+      console.log('  Blockhash:', transaction.recentBlockhash)
+      console.log('  Current slot:', currentSlot)
+      console.log('  Latest blockhash:', latestBlockhash.blockhash)
+
+      // Step 3: User signs with their wallet (adds second signature)
       console.log('✍️ Requesting user signature...')
       const signedTransaction = await signTransaction(transaction)
 
-      toast.loading('Sending transaction...', { id: loadingToast })
+      toast.loading('Creating market on blockchain...', { id: loadingToast })
 
       // Step 4: Send the fully signed transaction
       console.log('📤 Broadcasting transaction...')
-      const connection = new Connection(
-        process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com',
-        'confirmed',
-      )
 
+      // ✅ Use higher commitment and longer timeout for create market
       const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
         skipPreflight: false,
-        preflightCommitment: 'confirmed',
+        preflightCommitment: 'confirmed', // ✅ Use 'confirmed' not 'finalized' for faster execution
+        maxRetries: 5, // ✅ More retries for create market (complex transaction)
       })
 
       console.log('📝 Transaction signature:', signature)
-      toast.loading('Confirming transaction...', { id: loadingToast })
+      toast.loading('Waiting for blockchain confirmation...', { id: loadingToast })
+
+      // ✅ Wait for confirmation with generous timeout
+      const confirmation = await connection.confirmTransaction(
+        signature,
+        'confirmed', // Use 'confirmed' commitment
+      )
+
+      if (confirmation.value.err) {
+        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`)
+      }
+
+      console.log('✅ Transaction confirmed on-chain')
+      toast.loading('Finalizing market creation...', { id: loadingToast })
 
       // Step 5: Confirm with backend
       console.log('⏳ Confirming with backend...')
@@ -90,13 +113,17 @@ export default function CreatePage() {
       })
 
       // Success!
-      toast.success(`✅ Token created successfully!\n\nView on Explorer`, {
+      toast.success(`🎉 Token created successfully!`, {
         id: loadingToast,
         duration: 5000,
       })
 
       console.log('✅ Market created successfully!')
-      console.log('🔗 Explorer:', result.data.explorerUrl)
+      console.log('🔗 Market address:', prepared.data.marketAddress)
+      console.log('🔗 Mint address:', prepared.data.mintAddress)
+      if (result.data?.explorerUrl) {
+        console.log('🔗 Explorer:', result.data.explorerUrl)
+      }
 
       // Navigate to the new market
       setTimeout(() => {
@@ -108,21 +135,37 @@ export default function CreatePage() {
       // User-friendly error messages
       let errorMessage = 'Failed to create market'
 
-      if (error.message?.includes('User rejected')) {
+      if (error.message?.includes('User rejected') || error.message?.includes('User canceled')) {
         errorMessage = 'Transaction cancelled by user'
-      } else if (error.message?.includes('insufficient')) {
+      } else if (error.message?.includes('insufficient funds') || error.message?.includes('insufficient lamports')) {
         errorMessage = 'Insufficient SOL balance. You need at least 0.15 SOL.'
-      } else if (error.message?.includes('Simulation failed')) {
-        errorMessage = 'Transaction simulation failed. Please check your inputs.'
+      } else if (error.message?.includes('Blockhash not found')) {
+        errorMessage = 'Transaction expired. The server blockhash expired. Please try again.'
+      } else if (error.message?.includes('already been processed')) {
+        errorMessage = 'Transaction already processed. Checking status...'
+        toast.error(errorMessage, { id: loadingToast, duration: 3000 })
+
+        setTimeout(() => {
+          toast.loading('Refreshing page...', { id: loadingToast })
+          window.location.reload()
+        }, 2000)
+        return
+      } else if (error.message?.includes('Simulation failed') || error.message?.includes('simulation failed')) {
+        errorMessage = 'Transaction simulation failed. Please check your inputs and wallet balance.'
+      } else if (error.message?.includes('0x1')) {
+        errorMessage = 'Smart contract error. Please check all inputs are valid.'
+      } else if (error.message?.includes('Unexpected error')) {
+        errorMessage = 'Wallet signing error. Please try again or use a different wallet.'
       } else if (error.message) {
         errorMessage = error.message
       }
 
-      toast.error(errorMessage, { id: loadingToast })
+      toast.error(errorMessage, { id: loadingToast, duration: 6000 })
     } finally {
       setLoading(false)
     }
   }
+
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-2xl">
@@ -214,7 +257,7 @@ export default function CreatePage() {
           </label>
           <input
             type="url"
-            placeholder="https://i.imgur.com/example.jpg"
+            placeholder="https://picsum.photos/200/300"
             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             value={formData.imageUrl}
             onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}

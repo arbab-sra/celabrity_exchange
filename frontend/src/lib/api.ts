@@ -170,22 +170,6 @@ export const api = {
   // ==========================================
 
   /**
-   * Create new market (SERVER PAYS - DEPRECATED)
-   * @deprecated Use prepareCreateMarket for production
-   */
-  createMarket: async (data: {
-    initialPrice: number
-    initialSupply: number
-    name: string
-    symbol: string
-    description: string
-    imageUrl: string
-  }) => {
-    const response = await apiClient.post('/api/transactions/create-market', data)
-    return response.data
-  },
-
-  /**
    * Prepare market creation transaction (USER PAYS - RECOMMENDED)
    * Returns partially signed transaction for user to sign
    */
