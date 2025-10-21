@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 dotenv.config();
 export class UploadService {
   private nftStorageKey = process.env.NFT_STORAGE_API_KEY || "";
-
+  
   async uploadMetadata(metadata: {
     name: string;
     symbol: string;
@@ -28,7 +28,6 @@ export class UploadService {
           },
         }
       );
-
       const ipfsHash = response.data.value.cid;
       return `https://ipfs.io/ipfs/${ipfsHash}`;
     } catch (error) {
