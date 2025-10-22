@@ -1,10 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::metadata::{
-    create_metadata_accounts_v3, CreateMetadataAccountsV3, Metadata,
-};
+use anchor_spl::metadata::{create_metadata_accounts_v3, CreateMetadataAccountsV3, Metadata};
+use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
 use mpl_token_metadata::types::DataV2;
 
 declare_id!("6RYHxeQ4turMqubZkmLg4UB9AeNRbgW9tR5L2uQ7VJ4f");
@@ -12,13 +10,9 @@ declare_id!("6RYHxeQ4turMqubZkmLg4UB9AeNRbgW9tR5L2uQ7VJ4f");
 pub const PLATFORM_FEE_WALLET: &str = "2XchL7rEESZFJPEUgR4RjvduHdTR9J8ANqvsuzqmLUkv";
 pub const CREATION_FEE: u64 = 100_000_000; // 0.1 SOL
 pub const TRANSACTION_FEE_BPS: u64 = 100; // 1% = 100 basis points
-
-// ✅ NEW: Fee split ratios (basis points out of 10000)
 pub const PLATFORM_FEE_SHARE_BPS: u64 = 7000; // 70% = 7000 basis points
-pub const CREATOR_FEE_SHARE_BPS: u64 = 3000;  // 30% = 3000 basis points
-
-// ✅ NEW: Bonding curve parameters for exponential curve
-// P = BASE_PRICE × e^(K × supply / SCALE_FACTOR)
+pub const CREATOR_FEE_SHARE_BPS: u64 = 3000; // 30% = 3000 basis points
+                                             // P = BASE_PRICE × e^(K × supply / SCALE_FACTOR)
 pub const BASE_PRICE: u64 = 1_000_000; // 0.001 SOL
 pub const K_FACTOR: u64 = 5; // Growth rate (adjust for steepness)
 pub const SCALE_FACTOR: u64 = 10_000; // Scale to prevent overflow
@@ -26,7 +20,6 @@ pub const SCALE_FACTOR: u64 = 10_000; // Scale to prevent overflow
 #[program]
 pub mod celebrity_exchange {
     use super::*;
-
     pub fn create_market(
         ctx: Context<CreateMarket>,
         initial_price_lamports: u64,
@@ -59,7 +52,7 @@ pub mod celebrity_exchange {
         market.treasury = ctx.accounts.treasury.key();
         market.current_price = initial_price_lamports;
         market.total_supply = initial_supply;
-        market.circulating_supply = 0; // ✅ NEW: Track circulating supply for bonding curve
+        market.circulating_supply = 0; //Track circulating supply for bonding curve
         market.trade_count = 0;
         market.name = name.clone();
         market.symbol = symbol.clone();
@@ -131,13 +124,15 @@ pub mod celebrity_exchange {
         let market = &mut ctx.accounts.market;
 
         // ✅ NEW: Calculate price using exponential bonding curve
-        let new_circulating = market.circulating_supply.checked_add(amount)
+        let new_circulating = market
+            .circulating_supply
+            .checked_add(amount)
             .ok_or(ExchangeError::MathError)?;
-        
+
         let total_cost = calculate_buy_cost(
             market.circulating_supply,
             new_circulating,
-            market.current_price
+            market.current_price,
         )?;
 
         // Calculate 1% platform fee
@@ -254,13 +249,15 @@ pub mod celebrity_exchange {
         );
 
         // ✅ NEW: Calculate sell value using bonding curve
-        let new_circulating = market.circulating_supply.checked_sub(amount)
+        let new_circulating = market
+            .circulating_supply
+            .checked_sub(amount)
             .ok_or(ExchangeError::MathError)?;
-        
+
         let total_value = calculate_sell_value(
             market.circulating_supply,
             new_circulating,
-            market.current_price
+            market.current_price,
         )?;
 
         // Calculate 1% fee
@@ -313,7 +310,8 @@ pub mod celebrity_exchange {
 
         let market_key = market.key();
         let treasury_bump = ctx.bumps.treasury;
-        let treasury_seeds: &[&[u8]] = &[b"treasury".as_ref(), market_key.as_ref(), &[treasury_bump]];
+        let treasury_seeds: &[&[u8]] =
+            &[b"treasury".as_ref(), market_key.as_ref(), &[treasury_bump]];
 
         // Transfer SOL to seller (minus fees)
         anchor_lang::solana_program::program::invoke_signed(
@@ -400,7 +398,7 @@ pub mod celebrity_exchange {
     }
 }
 
-// ✅ NEW: Exponential bonding curve price calculation
+//  Exponential bonding curve price calculation
 fn calculate_current_price(circulating_supply: u64, _base_price: u64) -> Result<u64> {
     if circulating_supply == 0 {
         return Ok(BASE_PRICE);
@@ -408,7 +406,7 @@ fn calculate_current_price(circulating_supply: u64, _base_price: u64) -> Result<
 
     // P = BASE_PRICE × e^(K × S / SCALE_FACTOR)
     // Simplified using integer math to avoid floating point
-    
+
     let exponent = (circulating_supply as u128)
         .checked_mul(K_FACTOR as u128)
         .ok_or(ExchangeError::MathError)?
@@ -437,13 +435,14 @@ fn calculate_current_price(circulating_supply: u64, _base_price: u64) -> Result<
 fn calculate_buy_cost(from_supply: u64, to_supply: u64, base_price: u64) -> Result<u64> {
     // Integrate price curve from from_supply to to_supply
     let mut total_cost: u128 = 0;
-    
+
     for i in from_supply..to_supply {
         let price = calculate_current_price(i, base_price)?;
-        total_cost = total_cost.checked_add(price as u128)
+        total_cost = total_cost
+            .checked_add(price as u128)
             .ok_or(ExchangeError::MathError)?;
     }
-    
+
     Ok(total_cost as u64)
 }
 
@@ -452,7 +451,7 @@ fn calculate_sell_value(from_supply: u64, to_supply: u64, base_price: u64) -> Re
     calculate_buy_cost(to_supply, from_supply, base_price)
 }
 
-// ✅ UPDATED CONTEXTS
+//  CONTEXTS
 
 #[derive(Accounts)]
 #[instruction(initial_price_lamports: u64, initial_supply: u64, name: String, symbol: String, uri: String)]
@@ -553,7 +552,7 @@ pub struct BuySell<'info> {
     )]
     pub platform_fee_wallet: UncheckedAccount<'info>,
 
-    /// CHECK: ✅ NEW: Creator wallet (market owner)
+    /// CHECK:  Creator wallet (market owner)
     #[account(
         mut,
         constraint = creator_wallet.key() == market.owner @ ExchangeError::InvalidCreatorWallet
@@ -577,7 +576,7 @@ pub struct Market {
     pub treasury: Pubkey,
     pub current_price: u64,
     pub total_supply: u64,
-    pub circulating_supply: u64, // ✅ NEW
+    pub circulating_supply: u64,
     pub trade_count: u64,
     pub name: String,
     pub symbol: String,
@@ -596,7 +595,7 @@ pub struct MarketDetails {
     pub treasury: Pubkey,
     pub current_price: u64,
     pub total_supply: u64,
-    pub circulating_supply: u64, // ✅ NEW
+    pub circulating_supply: u64,
     pub trade_count: u64,
     pub name: String,
     pub symbol: String,
@@ -631,7 +630,7 @@ pub struct TradeExecuted {
     pub price: u64,
     pub total_cost: u64,
     pub platform_fee: u64,
-    pub creator_fee: u64, // ✅ NEW
+    pub creator_fee: u64,
     pub kind: TradeKind,
     pub timestamp: i64,
 }
@@ -648,6 +647,6 @@ pub enum ExchangeError {
     InvalidMetadata,
     #[msg("Invalid platform wallet")]
     InvalidPlatformWallet,
-    #[msg("Invalid creator wallet")] // ✅ NEW
+    #[msg("Invalid creator wallet")]
     InvalidCreatorWallet,
 }

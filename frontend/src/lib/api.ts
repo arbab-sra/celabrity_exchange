@@ -49,10 +49,6 @@ apiClient.interceptors.response.use(
 )
 
 export const api = {
-  // ==========================================
-  // MARKET ENDPOINTS
-  // ==========================================
-
   /**
    * Get all markets
    */
@@ -92,10 +88,6 @@ export const api = {
     const response = await apiClient.get(`/api/markets/owner/${owner}`)
     return response.data
   },
-
-  // ==========================================
-  // PRICE & VOLUME DATA
-  // ==========================================
 
   /**
    * Get price history for charts
@@ -151,10 +143,6 @@ export const api = {
     return response.data
   },
 
-  // ==========================================
-  // HOLDERS
-  // ==========================================
-
   /**
    * Get top holders
    */
@@ -164,10 +152,6 @@ export const api = {
     })
     return response.data
   },
-
-  // ==========================================
-  // MARKET CREATION
-  // ==========================================
 
   /**
    * Prepare market creation transaction (USER PAYS - RECOMMENDED)

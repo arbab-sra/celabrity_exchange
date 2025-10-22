@@ -7,10 +7,6 @@ dotenv.config();
  * Handles all database operations for markets, transactions, holders, and analytics
  */
 export class DatabaseMarketService {
-  // ==========================================
-  // MARKET OPERATIONS
-  // ==========================================
-
   /**
    * Get all markets from database with holder counts
    */
@@ -182,10 +178,6 @@ export class DatabaseMarketService {
     }
   }
 
-  // ==========================================
-  // PRICE HISTORY
-  // ==========================================
-
   /**
    * Get historical price data for charts
    */
@@ -290,10 +282,6 @@ export class DatabaseMarketService {
     }
   }
 
-  // ==========================================
-  // TRANSACTIONS
-  // ==========================================
-
   /**
    * Get detailed transaction history for a market
    */
@@ -390,10 +378,6 @@ export class DatabaseMarketService {
       throw new Error("Failed to save transaction");
     }
   }
-
-  // ==========================================
-  // HOLDERS
-  // ==========================================
 
   /**
    * Get top token holders
@@ -531,10 +515,6 @@ export class DatabaseMarketService {
     }
   }
 
-  // ==========================================
-  // 24 HOUR STATISTICS
-  // ==========================================
-
   /**
    * Get 24h statistics for a market
    */
@@ -652,10 +632,6 @@ export class DatabaseMarketService {
     }
   }
 
-  // ==========================================
-  // VOLUME CHART DATA
-  // ==========================================
-
   /**
    * Get volume data for charts
    */
@@ -690,10 +666,6 @@ export class DatabaseMarketService {
       return [];
     }
   }
-
-  // ==========================================
-  // USER PORTFOLIO
-  // ==========================================
 
   /**
    * Get user's complete portfolio
@@ -755,10 +727,6 @@ export class DatabaseMarketService {
       throw new Error("Failed to fetch user portfolio");
     }
   }
-
-  // ==========================================
-  // USER ACTIVITY
-  // ==========================================
 
   /**
    * Get user's trading activity
@@ -899,10 +867,6 @@ export class DatabaseMarketService {
       throw new Error("Failed to fetch user statistics");
     }
   }
-
-  // ==========================================
-  // PLATFORM ANALYTICS
-  // ==========================================
 
   /**
    * Get platform-wide analytics
@@ -1064,10 +1028,6 @@ export class DatabaseMarketService {
     }
   }
 
-  // ==========================================
-  // LEADERBOARD & TRENDING
-  // ==========================================
-
   /**
    * Get market leaderboard
    */
@@ -1199,10 +1159,6 @@ export class DatabaseMarketService {
       return [];
     }
   }
-
-  // ==========================================
-  // SEARCH
-  // ==========================================
 
   /**
    * Search markets

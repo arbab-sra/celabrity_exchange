@@ -6,11 +6,6 @@ dotenv.config();
 const transactionService = new TransactionService();
 
 export class TransactionController {
-  /**
-   * Create a new market (SERVER PAYS - OLD METHOD)
-   * POST /api/transactions/create-market
-   * @deprecated Use prepareCreateMarket for production
-   */
 
   /**
    * Prepare create market transaction (USER PAYS - NEW METHOD)
@@ -123,7 +118,7 @@ export class TransactionController {
   }
 
   /**
-   * Buy tokens (server pays) - For testing/airdrops
+   * Buy tokens (server pays) - For testing/airdrops/premotions
    * POST /api/transactions/buy-tokens
    */
   async buyTokensServerPaid(req: Request, res: Response) {

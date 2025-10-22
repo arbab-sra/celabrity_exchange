@@ -161,10 +161,6 @@ export class MarketController {
     }
   }
 
-  // ==========================================
-  // NEW DYNAMIC DATA ROUTES
-  // ==========================================
-
   /**
    * GET /api/markets/:address/price-history
    * Get historical price data for charts

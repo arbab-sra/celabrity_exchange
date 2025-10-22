@@ -672,7 +672,7 @@ export class TransactionService {
       // Build instruction with USER as first account (fee payer)
       const keys = [
         {
-          pubkey: userPubkey, // ✅ USER PAYS
+          pubkey: userPubkey, // PAYS
           isSigner: true,
           isWritable: true,
         },

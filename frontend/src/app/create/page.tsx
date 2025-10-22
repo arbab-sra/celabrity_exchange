@@ -7,7 +7,7 @@ import { api } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import Image from 'next/image'
+import { ImageUpload } from '@/components/image-upload'
 
 export default function CreatePage() {
   const { publicKey, connected, signTransaction } = useWallet()
@@ -35,7 +35,10 @@ export default function CreatePage() {
       toast.error('Your wallet does not support transaction signing!')
       return
     }
-
+    if (!formData.imageUrl) {
+      toast.error('Please upload an image or provide an image URL')
+      return
+    }
     setLoading(true)
     const loadingToast = toast.loading('Preparing transaction...')
 
@@ -166,7 +169,6 @@ export default function CreatePage() {
     }
   }
 
-
   return (
     <div className="container mx-auto px-4 py-12 max-w-2xl">
       <h1 className="text-4xl font-bold mb-2">Create Celebrity Token</h1>
@@ -252,35 +254,14 @@ export default function CreatePage() {
 
         {/* Image URL */}
         <div>
-          <label className="block font-semibold mb-2">
-            Image URL <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="url"
-            placeholder="https://picsum.photos/200/300"
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          
+          <ImageUpload
             value={formData.imageUrl}
-            onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-            required
             disabled={loading}
+            onChange={(url) => {
+              setFormData({ ...formData, imageUrl: url })
+            }}
           />
-          <p className="text-sm text-gray-500 mt-1">Use Imgur, IPFS, or any public URL</p>
-
-          {/* Image Preview */}
-          {formData.imageUrl && (
-            <div className="mt-3">
-              <Image
-                src={formData.imageUrl}
-                alt="Token preview"
-                width={128}
-                height={128}
-                className="w-32 h-32 object-cover rounded-lg border-2 border-gray-300 dark:border-gray-600"
-                onError={(e) => {
-                  e.currentTarget.src = 'https://via.placeholder.com/128?text=Invalid+URL'
-                }}
-              />
-            </div>
-          )}
         </div>
 
         {/* Initial Price */}
