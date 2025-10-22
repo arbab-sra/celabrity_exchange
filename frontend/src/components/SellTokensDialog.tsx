@@ -91,21 +91,21 @@ export function SellTokensDialog({ market, onSuccess }: { market: Market; onSucc
 
       console.log('📤 Broadcasting transaction...')
 
-      // ✅ CRITICAL FIX FOR PHANTOM: Use proper send options
+      // CRITICAL FIX FOR PHANTOM: Use proper send options
       const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
         skipPreflight: false, // Phantom needs this to be false
-        preflightCommitment: 'finalized', // ✅ Changed from 'confirmed'
-        maxRetries: 3, // ✅ NEW: Retry up to 3 times
+        preflightCommitment: 'finalized', //  Changed from 'confirmed'
+        maxRetries: 3, // NEW: Retry up to 3 times
       })
 
       console.log('📝 Transaction signature:', signature)
       toast.loading('Waiting for confirmation...', { id: loadingToast })
 
-      // ✅ CRITICAL FIX: Use the SAME blockhash we used for signing
+      //  CRITICAL FIX: Use the SAME blockhash we used for signing
       await connection.confirmTransaction(
         {
           signature,
-          blockhash, // ✅ Use the fresh blockhash
+          blockhash, //  Use the fresh blockhash
           lastValidBlockHeight,
         },
         'confirmed',
