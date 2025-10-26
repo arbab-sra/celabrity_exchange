@@ -87,35 +87,35 @@ export default function MarketDetailPage() {
   const priceChange24h = stats24h ? parseFloat(stats24h.priceChangePercent) : 0
   const isPositiveChange = priceChange24h >= 0
 
-  if (localStorage.getItem(`${params.id}`) != 'true') {
-    toast(
-      (t) => (
-        <div className="flex flex-col relative gap-2 p-3">
-          <button
-            className="absolute -top-4 rounded-md right-0 bg-green-800 text-white px-2 "
-            onClick={() => toast.dismiss(t.id)}
-          >
-            x
-          </button>
-          <p className="text-md dark:text-white text-black">Do you want to Subscribe the market events</p>
-          <div className="flex gap-2">
-            <input type="text" className="border w-full h-full" />
-            <button
-              onClick={() => {
-                localStorage.setItem(`${params.id}`, 'true')
-                //todo: handal updata in the db
-                toast.dismiss(t.id)
-              }}
-              className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700"
-            >
-              Subscribe Market
-            </button>
-          </div>
-        </div>
-      ),
-      { duration: 15000 },
-    )
-  }
+  // if (localStorage.getItem(`${params.id}`) != 'true') {
+  //   toast(
+  //     (t) => (
+  //       <div className="flex flex-col relative gap-2 p-3">
+  //         <button
+  //           className="absolute -top-4 rounded-md right-0 bg-green-800 text-white px-2 "
+  //           onClick={() => toast.dismiss(t.id)}
+  //         >
+  //           x
+  //         </button>
+  //         <p className="text-md dark:text-white text-black">Do you want to Subscribe the market events</p>
+  //         <div className="flex gap-2">
+  //           <input type="text" className="border w-full h-full" />
+  //           <button
+  //             onClick={() => {
+  //               localStorage.setItem(`${params.id}`, 'true')
+  //               //todo: handal updata in the db
+  //               toast.dismiss(t.id)
+  //             }}
+  //             className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700"
+  //           >
+  //             Subscribe Market
+  //           </button>
+  //         </div>
+  //       </div>
+  //     ),
+  //     { duration: 15000 },
+  //   )
+  // }
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Animated Background */}
