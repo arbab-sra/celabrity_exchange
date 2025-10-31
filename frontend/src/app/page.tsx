@@ -8,6 +8,7 @@ import { TrendingUp, Zap, Shield, Users, Sparkles, ArrowRight } from 'lucide-rea
 import { formatNumber } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import Footercomp from '@/components/footer'
 
 export default function HomePage() {
   const [markets, setMarkets] = useState<Market[]>([])
@@ -410,6 +411,7 @@ export default function HomePage() {
             </motion.div>
           </div>
         </section>
+        <Footercomp />
       </div>
     </>
   )
