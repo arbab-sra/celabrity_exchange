@@ -114,10 +114,10 @@ export default function HomePage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="inline-flex items-center gap-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm px-4 py-2 rounded-full mb-6 shadow-lg"
+                className="animate-bounce inline-flex items-center gap-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm px-4 py-2 rounded-full mb-6 shadow-lg"
               >
                 <Sparkles className="w-4 h-4 text-purple-600" />
-                <span className="text-sm font-semibold text-purple-600 dark:text-purple-400">Powered by Solana</span>
+                <span className=" text-sm font-semibold text-purple-600 dark:text-purple-400">Powered by Solana</span>
               </motion.div>
 
               <motion.h1
@@ -126,18 +126,22 @@ export default function HomePage() {
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="text-5xl md:text-7xl font-bold mb-6 leading-tight"
               >
-                <span className="bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r  from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
                   Trade Celebrity Tokens
                 </span>
                 <br />
-                <span className="text-gray-900 dark:text-white">Like a Pro</span>
+                <span className="mr-2 text-slate-700/50 dark:text-gray-50/50 ">Like a</span>
+
+                <span className="text-slate-700/50 dark:text-gray-50/50 border-[#aa84bd] dark:border-[#aa84bd] border-b-8">
+                  Pro
+                </span>
               </motion.h1>
 
               <motion.p
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
-                className="text-xl mb-8 text-gray-700 dark:text-gray-300 max-w-2xl mx-auto"
+                className="text-xl mb-8 text-gray-800/50  dark:text-gray-100/50 max-w-2xl mx-auto"
               >
                 Create, buy, and sell celebrity tokens with automated market making, instant settlement, and transparent
                 pricing on Solana blockchain.
@@ -366,17 +370,8 @@ export default function HomePage() {
               background:
                 'radial-gradient(ellipse at top, #F3E8FF 0%, #DDD6FE 20%, #C4B5FD 40%, #A78BFA 70%, #8B5CF6 100%)',
             }}
-            animate={{
-              backgroundPosition: ['0px 0px', '50px 50px'],
-            }}
-            transition={{
-              duration: 20,
-              repeat: Infinity,
-              ease: 'linear',
-            }}
           />
-
-          <div className="relative z-10 container mx-auto px-4 py-20 text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent group-hover:from-pink-600 group-hover:to-purple-600 ">
+          <div className="relative  z-10 container mx-auto px-4 py-20 text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent group-hover:from-pink-600 group-hover:to-purple-600 rounded-md ">
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}

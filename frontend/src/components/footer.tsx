@@ -19,7 +19,7 @@ const Footercomp = () => {
         <div className="grid w-full justify-center items-center sm:flex sm:justify-between md:flex md:grid-cols-1">
           <div>
             <FooterBrand
-              className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent group-hover:from-pink-600 group-hover:to-purple-600 ark:text-slate-400"
+              className="bg-gradient-to-r opacity-80 from-purple-600 to-pink-600 bg-clip-text text-transparent group-hover:from-pink-600 group-hover:to-purple-600 ark:text-slate-400"
               href="/"
               src="https://res.cloudinary.com/duns099gs/image/upload/v1760680167/Screenshot_2025-10-16_at_1.20.45_PM_yzhnnd.png"
               alt="   Celebrity exchange"
