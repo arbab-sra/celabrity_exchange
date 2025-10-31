@@ -360,7 +360,7 @@ export default function HomePage() {
 
           {/* Animated Background Pattern */}
           <motion.div
-            className="absolute inset-0 opacity-20"
+            className="absolute inset-0"
             style={{
               background:
                 'radial-gradient(ellipse at top, #F3E8FF 0%, #DDD6FE 20%, #C4B5FD 40%, #A78BFA 70%, #8B5CF6 100%)',
@@ -375,7 +375,7 @@ export default function HomePage() {
             }}
           />
 
-          <div className="relative z-10 container mx-auto px-4 py-20 text-center text-white">
+          <div className="relative z-10 container mx-auto px-4 py-20 text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent group-hover:from-pink-600 group-hover:to-purple-600 ">
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -390,7 +390,7 @@ export default function HomePage() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
               viewport={{ once: true }}
-              className="text-xl mb-10 text-white/90 max-w-2xl mx-auto"
+              className="text-xl mb-10 bg-gradient-to-r from-purple-600 to-slate-600 bg-clip-text text-transparent group-hover:from-pink-600 group-hover:to-purple-600 max-w-2xl mx-auto"
             >
               Join thousands of traders on the fastest celebrity token exchange
             </motion.p>

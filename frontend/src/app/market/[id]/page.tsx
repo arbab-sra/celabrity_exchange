@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import {  useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useMarket } from '@/hoooks/useMarket'
 import { PriceChart } from '@/components/charts/priceChart'
