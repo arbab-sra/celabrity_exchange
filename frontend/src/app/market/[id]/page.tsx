@@ -217,7 +217,7 @@ export default function MarketDetailPage() {
                 </h1>
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm font-semibold">
-                    {market.symbol}
+                    {market.symbol }
                   </span>
                   <button
                     onClick={() => copyAddress(market.mint)}

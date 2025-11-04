@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '@/lib/api'
-import { Market, Transaction, PricePoint, Holder, PricePointAPI ,VolumeDataAPI} from '@/types'
+import { Market, Transaction, PricePoint, Holder, PricePointAPI, VolumeDataAPI } from '@/types'
 
 // ✅ Define missing types
 interface VolumeData {
@@ -67,6 +67,7 @@ export function useMarket(marketAddress: string): UseMarketReturn {
     try {
       const response = await api.getMarketStats(marketAddress)
       // ✅ Fix: setMarket expects Market, not transformed PricePoint[]
+      console.log(response.data)
       setMarket(response.data)
       console.log('✅ Market loaded:', response.data)
     } catch (err) {

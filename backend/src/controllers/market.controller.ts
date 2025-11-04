@@ -91,11 +91,12 @@ export class MarketController {
 
       // Enhance with database stats
       const dbStats = await dbMarketService.get24hVolume(address);
-
+      const mataData = await dbMarketService.getMarketByAddress(address)
       res.json({
         success: true,
         data: {
           ...stats,
+          ...mataData,
           volume24h: dbStats.volume,
           volume24hSOL: (Number(dbStats.volume) / 1e9).toFixed(4),
           trades24h: dbStats.trades,

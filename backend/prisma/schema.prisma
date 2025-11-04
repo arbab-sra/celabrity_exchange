@@ -14,7 +14,6 @@ model Market {
   mint          String         @unique
   escrow        String
   treasury      String
-  
   name          String
   symbol        String
   description   String?
