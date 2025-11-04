@@ -63,10 +63,6 @@ export default function CreatePage() {
       // Step 2: Deserialize the transaction
       const transaction = Transaction.from(Buffer.from(prepared.data.transaction, 'base64'))
 
-      // ❌ DON'T replace blockhash for multi-sig transactions!
-      // The server already signed with a blockhash, replacing it invalidates their signature
-
-      // ✅ OPTIONAL: Check if blockhash is still valid (best practice)
       const { value: latestBlockhash } = await connection.getLatestBlockhashAndContext('finalized')
       const currentSlot = await connection.getSlot('finalized')
 

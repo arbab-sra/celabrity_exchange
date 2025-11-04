@@ -75,7 +75,20 @@ export function useMarket(marketAddress: string): UseMarketReturn {
       throw new Error(`Failed to load market: ${err}`)
     }
   }, [marketAddress])
-
+  const calculateBuyPrice = async (amount: number) => {
+  try {
+    const response = await api.calculatePrice({
+      currentPrice: market?.currentPrice || "0", // ✅ Default to "0" for new tokens
+      amount: amount.toString(),
+      totalSupply: market?.totalSupply || "0",
+      isBuy: true
+    })
+    return response.data
+  } catch (err) {
+    console.error('❌ Error calculating price:', err)
+    throw err
+  }
+  }
   /**
    * Load transactions
    */
@@ -280,12 +293,8 @@ export function useMarket(marketAddress: string): UseMarketReturn {
     volumeData,
     holders,
     stats24h,
-
-    // State
     loading,
     error,
-
-    // Actions
     refresh,
     refreshMarket,
     refreshTransactions,

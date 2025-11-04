@@ -306,8 +306,16 @@ export class TransactionController {
     try {
       const { currentPrice, amount, totalSupply, isBuy } = req.body;
 
-      // Validation
-      if (!currentPrice || !amount || !totalSupply || isBuy === undefined) {
+      // ✅ Fixed Validation - Allow currentPrice = 0 for new tokens
+      if (
+        currentPrice === undefined ||
+        currentPrice === null ||
+        amount === undefined ||
+        amount === null ||
+        totalSupply === undefined ||
+        totalSupply === null ||
+        isBuy === undefined
+      ) {
         return res.status(400).json({
           success: false,
           error:
@@ -315,7 +323,8 @@ export class TransactionController {
         });
       }
 
-      const currentPriceNum = parseFloat(currentPrice);
+      // Parse and validate numeric values
+      let currentPriceNum = parseFloat(currentPrice);
       const amountNum = parseFloat(amount);
       const totalSupplyNum = parseFloat(totalSupply);
 
@@ -326,24 +335,36 @@ export class TransactionController {
         });
       }
 
-      if (currentPriceNum <= 0 || amountNum <= 0 || totalSupplyNum <= 0) {
+      // ✅ Allow currentPrice = 0 for new tokens, but others must be positive
+      if (currentPriceNum < 0 || amountNum <= 0 || totalSupplyNum <= 0) {
         return res.status(400).json({
           success: false,
-          error: "All values must be positive numbers",
+          error:
+            "Invalid values: amount and totalSupply must be positive, currentPrice must be non-negative",
         });
       }
 
-      // Bonding curve formula
-      const k = 0.000001;
+      // Bonding curve parameters
+      const k = 0.000001; // Curve sensitivity
+      const minimumPrice = 1000; // Minimum price in lamports (0.000001 SOL)
       let newPrice: number;
 
       if (isBuy) {
         const newSupply = totalSupplyNum + amountNum;
-        const supplyGrowthFactor = newSupply / totalSupplyNum;
-        newPrice =
-          currentPriceNum *
-          (1 + (supplyGrowthFactor - 1) * (1 + k * newSupply));
+
+        // ✅ Handle initial token creation (currentPrice = 0)
+        if (currentPriceNum === 0) {
+          // For first purchase, set initial price based on amount
+          newPrice = minimumPrice * (1 + k * amountNum);
+        } else {
+          // Regular bonding curve calculation
+          const supplyGrowthFactor = newSupply / totalSupplyNum;
+          newPrice =
+            currentPriceNum *
+            (1 + (supplyGrowthFactor - 1) * (1 + k * newSupply));
+        }
       } else {
+        // Sell operation
         const newSupply = totalSupplyNum - amountNum;
 
         if (newSupply <= 0) {
@@ -353,22 +374,42 @@ export class TransactionController {
           });
         }
 
+        if (currentPriceNum === 0) {
+          return res.status(400).json({
+            success: false,
+            error: "Cannot sell tokens when current price is 0",
+          });
+        }
+
         const supplyReductionFactor = newSupply / totalSupplyNum;
         newPrice =
           currentPriceNum * supplyReductionFactor * (1 - k * amountNum);
       }
 
-      const minimumPrice = 1000;
+      // Enforce minimum price floor
       newPrice = Math.max(newPrice, minimumPrice);
 
+      // Calculate price metrics
       const priceChange = newPrice - currentPriceNum;
-      const priceChangePercent = (priceChange / currentPriceNum) * 100;
+      const priceChangePercent =
+        currentPriceNum > 0 ? (priceChange / currentPriceNum) * 100 : 100; // 100% increase from 0
 
-      const averagePrice = (currentPriceNum + newPrice) / 2;
+      // Calculate average execution price (for cost calculation)
+      const averagePrice =
+        currentPriceNum === 0
+          ? newPrice / 2 // Average between 0 and newPrice
+          : (currentPriceNum + newPrice) / 2;
+
+      // Calculate total cost/value
       const totalCost = averagePrice * amountNum;
-      const platformFee = totalCost * 0.01;
-      const totalWithFee = totalCost + platformFee;
 
+      // Platform fees (1%)
+      const platformFee = totalCost * 0.01;
+      const totalWithFee = isBuy
+        ? totalCost + platformFee
+        : totalCost - platformFee;
+
+      // ✅ Use Math.floor for lamports precision (integers only)
       res.json({
         success: true,
         data: {
@@ -389,6 +430,9 @@ export class TransactionController {
           totalWithFee: Math.floor(totalWithFee).toString(),
           totalWithFeeSOL: (totalWithFee / 1e9).toFixed(6),
           amount: amount,
+          newSupply: isBuy
+            ? (totalSupplyNum + amountNum).toString()
+            : (totalSupplyNum - amountNum).toString(),
           isBuy: isBuy,
           message: isBuy
             ? `Buying ${amount} tokens will increase price by ${Math.abs(
